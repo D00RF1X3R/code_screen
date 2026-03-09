@@ -52,6 +52,17 @@ mod code_screen {
         }
 
         return colored_string;
+    }
+
+    trait Sequence {
+        fn new(col_start: i32, rgb: [i32;3], length:i32, chars: &str ) -> Self where Self: Sized;
+        fn step(&mut self);
+        fn get_top_coord(&self) -> [i32;2];
+        fn len(&self) -> i32;
+        fn get_color(&self) -> [i32; 3];
+        fn get_symbol_by_index(&self, i: usize) -> char;
+        fn get_x(&self) -> i32;
+        fn get_y(&self) -> i32;
 
     }
 
@@ -59,11 +70,21 @@ mod code_screen {
         coords: [i32; 2],
         color: [i32; 3],
         line: Vec<char>,
-        length: i32
-
+        length: i32,
     }
-    impl CodeSeuqence {
-        pub fn new(col_start:i32, rgb: [i32; 3], length: i32, chars: &str) -> Self {
+
+    struct GlitchSequence {
+        coords: [i32; 2],
+        color: [i32; 3],
+        line: Vec<char>,
+        length: i32,
+        mutable_indexes: Vec<i8> // Надо сделать так, чтобы цвет конкретного символа менялся
+    }
+
+
+
+    impl Sequence for CodeSeuqence {
+        fn new(col_start:i32, rgb: [i32; 3], length: i32, chars: &str) -> Self {
             let chars_iter = chars.chars();
             let mut line: Vec<char> = vec![];
             let mut rng = rand::rng();
@@ -74,31 +95,89 @@ mod code_screen {
 
             return seq
         }
-        pub fn step(&mut self) {
+        fn step(&mut self) {
             self.coords[0] += 1
         }
-        pub fn get_top_coord(&self) -> [i32; 2] {
+        fn get_top_coord(&self) -> [i32; 2] {
             return self.coords;
         }
-        pub fn len(&self) -> i32 {
+        fn len(&self) -> i32 {
             return self.length;
         }
-        pub fn get_color(&self) -> [i32; 3] {
+        fn get_color(&self) -> [i32; 3] {
             return self.color;
         }
-        pub fn get_symbol_by_index(&self, i: usize) -> char {
+        fn get_symbol_by_index(&self, i: usize) -> char {
             match self.line.get(i) {
                 Some (char ) => {return *char}
                 None => {panic!()}
             }
         }
+        fn get_x(&self) -> i32 {
+            self.coords[0]
+        }
+        fn get_y(&self) -> i32 {
+            self.coords[1]
+        }
+        
     }
+
+    impl GlitchSequence {
+        fn mutate_symbol(&mut self) {
+            
+        }
+    }
+
+    impl Sequence for GlitchSequence {
+        fn new(col_start:i32, rgb: [i32; 3], length: i32, chars: &str) -> Self {
+            let chars_iter = chars.chars();
+            let mut line: Vec<char> = Vec::new();
+            let mut rng = rand::rng();
+            let mut mutable_indexes = Vec::new();
+            for i in 0..length {
+                line.push(chars_iter.clone().choose(&mut rng).unwrap());
+                if rng.random_range(0..5) == 0 {
+                    mutable_indexes.push(i.try_into().unwrap());
+                }
+            }
+            let seq = GlitchSequence {coords: [0, col_start], color: rgb, length, line, mutable_indexes};
+            return seq
+        }
+        fn step(&mut self) {
+            let mut rng = rand::rng();
+            self.coords[0] += rng.random_range(1..3); // Рандомная скорость, мб лучше добавить как поле
+        }
+        fn get_top_coord(&self) -> [i32; 2] {
+            return self.coords;
+        }
+        fn len(&self) -> i32 {
+            return self.length;
+        }
+        fn get_color(&self) -> [i32; 3] {
+            return self.color;
+        }
+        fn get_symbol_by_index(&self, i: usize) -> char {
+            match self.line.get(i) {
+                Some (char ) => {return *char}
+                None => {panic!()}
+            }
+        }
+        fn get_x(&self) -> i32 {
+            self.coords[0]
+        }
+        fn get_y(&self) -> i32 {
+            self.coords[1]
+        }
+
+    }
+
+
     pub fn get_random_color(colors_vec: &Vec<[i32; 3]>) -> [ i32; 3 ] {
         let mut rng = rand::rng();
         colors_vec.clone().choose(&mut rng).unwrap().clone()
     }
-    fn check_seq_on_coords(row: i32, col: i32, sequences: &Vec<CodeSeuqence>) -> Option<&CodeSeuqence> {
-        return sequences.iter().find(|f| (row..(row+f.len())).contains(&f.coords[0]) && f.coords[1] == col.into());
+    fn check_seq_on_coords(row: i32, col: i32, sequences: &Vec<Box<dyn Sequence>>) -> Option<&Box<dyn Sequence>> {
+        return sequences.iter().find(|f| (row..(row+f.len())).contains(&f.get_x()) && f.get_y() == col.into());
     }
 
 
@@ -106,7 +185,7 @@ mod code_screen {
         let mut stdout = io::stdout();
         let mut rng = rand::rng();
         let colors_vec = colors.unwrap_or([[0, 255, 0]].to_vec());
-        let mut sequences: Vec<CodeSeuqence> = vec![];
+        let mut sequences: Vec<Box<dyn Sequence>> = Vec::new();
 
         enable_raw_mode()?;
         stdout.execute(Clear(terminal::ClearType::All))?;
@@ -117,13 +196,25 @@ mod code_screen {
         loop {  
             let (cols, rows) = terminal::size()?;
             for _ in  0..rng.random_range(1..6){
-                let seq = CodeSeuqence::new(
-                    rng.random_range(0..cols).into(),
-                    get_random_color(&colors_vec),
-                    rng.random_range(1..30),
-                    symbols
-                );
-                
+                let seq: Box<dyn Sequence>;
+                match rng.random_bool(0.5) {
+                    false => {
+                        seq = Box::new(CodeSeuqence::new(
+                            rng.random_range(0..cols).into(),
+                            get_random_color(&colors_vec),
+                            rng.random_range(1..30),
+                            symbols
+                        ))
+                    }
+                    true => {
+                        seq = Box::new(GlitchSequence::new(
+                            rng.random_range(0..cols).into(),
+                            get_random_color(&colors_vec),
+                            rng.random_range(1..30),
+                            symbols
+                        ));
+                    }
+                }
                 sequences.push(seq);
             }
             if poll(Duration::from_millis(40))? {
@@ -160,10 +251,7 @@ mod code_screen {
                             line += " ";
                         }
                     }
-                    
-                    
-
-
+                
                     //     let rgb = colors_vec.clone().choose(&mut rng).unwrap().clone();
                     //     let symbol = symbols.clone().choose(&mut rng).unwrap();
                     //     let colored_string = &make_colored_string(symbol, rgb);
