@@ -4,28 +4,41 @@ use crate::code_screen::start_code;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    let mut colors: Vec<[i32;3]> = vec![];
     
     if args.len() == 1 {
         let _ = start_code(None);
     } else {
+        for arg in 1..args.len() {
+            let argument = &args[arg];
+            match argument {
+                // Аргумент цвета -c --color, принимается в виде r,g,b,r,g,b,...,r,g,b
+                val if val == "-c" || val == "--color" => {
+                    let colors_arg = &args[arg+1];
 
-        // Аргумент принимает цвета в виде r,g,b,r,g,b,...,r,g,b
-        let colors_arg = &args[1];
+                    let mut built_color: [ i32; 3 ] = [0; 3];
+                    let mut counter = 0;
 
-        let mut colors: Vec<[i32;3]> = vec![];
-        let mut built_color: [ i32; 3 ] = [0; 3];
-        let mut counter = 0;
+                    for color in colors_arg.split(',') {
+                        if counter % 3 == 2 {
+                            built_color[counter%3] = color.parse::<i32>().expect("Насрано");
+                            colors.push(built_color.clone());
+                        } else {
+                            built_color[counter%3] = color.parse::<i32>().expect("Насрано");
+                        }
+                        counter += 1;
+                    }
+                }
+                /*val if val == "--Color" => {
 
-        for color in colors_arg.split(',') {
-            if counter % 3 == 2 {
-                built_color[counter%3] = color.parse::<i32>().expect("Насрано");
-                colors.push(built_color.clone());
-            } else {
-                built_color[counter%3] = color.parse::<i32>().expect("Насрано");
+                }*/
+                _ => {}
             }
-            counter += 1;
         }
-        let _ = start_code(Some(colors));
+
+        if colors.len() != 0 {
+            let _ = start_code(Some(colors));
+        }
     }
     
 }
@@ -36,7 +49,6 @@ mod code_screen {
     use std::io::{self};
     use std::thread;
     use std::time::Duration;
-
     use crossterm::cursor::{Hide, MoveTo, Show};
     use crossterm::{ExecutableCommand, execute};
     use crossterm::event::{Event, KeyCode, poll, read};
@@ -234,7 +246,7 @@ mod code_screen {
             }
 
             // Создание случайных строчек кода
-            for _ in  0..rng.random_range(1..cols.div_ceil(50)){ // Нужно будет добавить в аргументы число, чтобы контролироовать количество строк
+            for _ in  0..rng.random_range(1..cols.div_ceil(75)){ // Нужно будет добавить в аргументы число, чтобы контролироовать количество строк
                 let seq: Box<dyn Sequence>;
                 match *sequence_types.iter().choose(&mut rng).unwrap() {
                     "CodeSequence" => {
@@ -269,8 +281,8 @@ mod code_screen {
             stdout.execute(MoveTo(0, 0))?;
             
             // Основной цикл отбражения строк в терминал
+            let mut line: String = "".to_string();
             for row in 0..rows {
-                let mut line: String = "".to_string();
                 for col in 0..cols {
                     let row_i32: i32 = row.into();
                     match check_seq_on_coords(row_i32, col.into(), &sequences) {
@@ -283,11 +295,13 @@ mod code_screen {
                         }
                     }
                 }
-                execute!(
-                    stdout,
-                    Print(line.clone())
-                )?; 
+                 
             }
+            execute!(
+                    stdout,
+                    // Добавляю еще bold на весь шрифт
+                    Print("\x1b[1m".to_owned() + &line.clone() + "\x1b[0m")
+                )?;
             stdout.flush()?;
 
             // Сборка мусора
@@ -297,7 +311,7 @@ mod code_screen {
             sequences.retain(|x: &Box<dyn Sequence + 'static>| x.get_top_coord()[0]-x.len() < rows.into());
 
             // Время между 'кадрами'
-            thread::sleep(Duration::from_millis(40));
+            thread::sleep(Duration::from_millis(50));
         }
 
         // Возвращаем терминал в обычное состояние
