@@ -48,7 +48,7 @@ mod code_screen {
     use std::io::Write;
     use std::io::{self};
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use crossterm::cursor::{Hide, MoveTo, Show};
     use crossterm::{ExecutableCommand, execute};
     use crossterm::event::{Event, KeyCode, poll, read};
@@ -224,6 +224,8 @@ mod code_screen {
 
         // Бесконечный цикл падающих строк
         loop {  
+            // Время начала выполнения всех циклов
+            let time_start = Instant::now();
             let (cols, rows) = terminal::size()?;
 
             // Обработка действий в терминале
@@ -246,7 +248,7 @@ mod code_screen {
             }
 
             // Создание случайных строчек кода
-            for _ in  0..rng.random_range(1..cols.div_ceil(75)){ // Нужно будет добавить в аргументы число, чтобы контролироовать количество строк
+            for _ in  0..rng.random_range(1..cols.div_ceil(25)){ // Нужно будет добавить в аргументы число, чтобы контролироовать количество строк
                 let seq: Box<dyn Sequence>;
                 match *sequence_types.iter().choose(&mut rng).unwrap() {
                     "CodeSequence" => {
@@ -310,8 +312,12 @@ mod code_screen {
             }
             sequences.retain(|x: &Box<dyn Sequence + 'static>| x.get_top_coord()[0]-x.len() < rows.into());
 
-            // Время между 'кадрами'
-            thread::sleep(Duration::from_millis(50));
+            // Разница между временем начала и конца выполнения всех циклов
+            let time_diff = Instant::now() - time_start;
+            
+
+            // Время между 'кадрами', динамически изменяемое от времени на выполнение всех циклов, чтобы поддерживать стабильные кадры
+            thread::sleep(Duration::from_millis(34) - time_diff);
         }
 
         // Возвращаем терминал в обычное состояние
