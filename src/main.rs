@@ -49,7 +49,7 @@ mod code_screen {
     use std::io::{self};
     use std::thread;
     use std::time::{Duration, Instant};
-    use crossterm::cursor::{Hide, MoveTo, Show};
+    use crossterm::cursor::{Hide, MoveLeft, MoveTo, MoveUp, Show};
     use crossterm::{ExecutableCommand, execute};
     use crossterm::event::{Event, KeyCode, poll, read};
     use crossterm::style::{Print,};
@@ -120,15 +120,24 @@ mod code_screen {
             self.coords[0] += 1
         }
         fn draw(&self, stdout: &mut io::Stdout) {
+            if self.coords[0] - self.length > 0 {
+                let coords: [u16;2] = [(self.coords[0] - self.length).try_into().unwrap(), self.coords[1].try_into().unwrap()];
+                let _ = stdout.execute(MoveTo(coords[1], coords[0]));
+                let _ = stdout.execute(Print(' '));
+            }
+            
+            
             for i in 0..self.length {
-                let coords: [u16;2] = [self.coords[0].try_into().unwrap(), (self.coords[1] + i).try_into().unwrap()];
-                let _ = stdout.execute(MoveTo(coords[0], coords[1]));
-                let symbol;
-                match self.line.get(i as usize) {
-                    Some(char) => {symbol = make_colored_string(*char, self.color)}
-                    None => {panic!()}
+                if self.coords[0] - i > 0 {
+                    let coords: [u16;2] = [(self.coords[0] - i).try_into().unwrap(), self.coords[1].try_into().unwrap()];
+                    let _ = stdout.execute(MoveTo(coords[1], coords[0]));
+                    let symbol;
+                    match self.line.get(i as usize) {
+                        Some(char) => {symbol = make_colored_string(*char, self.color)}
+                        None => {panic!()}
+                    }
+                    let _ = stdout.execute(Print(symbol));
                 }
-                let _ = stdout.execute(Print(symbol));
             }
         }
         fn get_top_coord(&self) -> [i32; 2] {
@@ -177,15 +186,23 @@ mod code_screen {
             self.coords[0] += rng.random_range(1..3); // Рандомная скорость, мб лучше добавить как поле
         }
         fn draw(&self, stdout: &mut io::Stdout) {
-            for i in 0..self.length {
-                let coords: [u16;2] = [self.coords[0].try_into().unwrap(), (self.coords[1] + i).try_into().unwrap()];
-                let _ = stdout.execute(MoveTo(coords[0], coords[1]));
-                let symbol;
-                match self.line.get(i as usize) {
-                    Some(char) => {symbol = make_colored_string(*char, self.colors[0])}
-                    None => {panic!()}
+            if self.coords[0] - self.length > 0 {
+                let coords: [u16;2] = [(self.coords[0] - self.length).try_into().unwrap(), self.coords[1].try_into().unwrap()];
+                let _ = stdout.execute(MoveTo(coords[1], coords[0]));
+                let _ = stdout.execute(Print(' '));
+            }
+            
+            for i in self.coords[1]..self.length {
+                if self.coords[0] - i > 0 {
+                    let coords: [u16;2] = [(self.coords[0] - i).try_into().unwrap(), self.coords[1].try_into().unwrap()];
+                    let _ = stdout.execute(MoveTo(coords[1], coords[0]));
+                    let symbol;
+                    match self.line.get(i as usize) {
+                        Some(char) => {symbol = make_colored_string(*char, self.colors[0])}
+                        None => {panic!()}
+                    }
+                    let _ = stdout.execute(Print(symbol));
                 }
-                let _ = stdout.execute(Print(symbol));
             }
         }
         fn get_top_coord(&self) -> [i32; 2] {
@@ -232,7 +249,7 @@ mod code_screen {
     pub fn start_code(colors: Option<Vec<[i32; 3]>>) -> Result<(), Box<dyn std::error::Error>> {
         // Статичные данные
         let colors_vec: Vec<[i32; 3]> = colors.unwrap_or([[0, 255, 0]].to_vec());
-        let sequence_types: [&str; 2] = ["CodeSequence", "GlitchSequence"];
+        let sequence_types: [&str; 1] = ["CodeSequence"/*, "GlitchSequence"*/];
         let symbols: &str = "10"; 
 
         // Меняющиеся данные
@@ -249,7 +266,7 @@ mod code_screen {
         let mut line: String = "".to_string();
         for _row in 0..rows {
             for _col in 0..cols {
-                line += " ";
+                line += &make_colored_string(' ', [1, 1, 1]);
             }
         }
         execute!(
@@ -258,13 +275,12 @@ mod code_screen {
                 Print("\x1b[1m".to_owned() + &line.clone() + "\x1b[0m")
             )?;
         stdout.flush()?;
+        stdout.execute(MoveTo(0, 0))?;
 
         // Бесконечный цикл падающих строк
         loop {  
             // Время начала выполнения всех циклов
             let time_start = Instant::now();
-            (cols, rows) = terminal::size()?;
-
             // Обработка действий в терминале
             if poll(Duration::ZERO)? {
                 match read()? {
@@ -280,7 +296,7 @@ mod code_screen {
                     Event::FocusLost => todo!(),
                     Event::Mouse(_mouse_event) => todo!(),
                     Event::Paste(_) => todo!(),
-                    Event::Resize(_, _) => {},
+                    Event::Resize(_, _) => {(cols, rows) = terminal::size()?;},
                 }
             }
 
@@ -317,7 +333,7 @@ mod code_screen {
             }
 
             // Курсор в нулевое положение, чтобы не рисовать всё по новой
-            stdout.execute(MoveTo(0, 0))?;
+            
             
             // Основной цикл отбражения строк в терминал
             // let mut line: String = "".to_string();
@@ -355,7 +371,8 @@ mod code_screen {
             
 
             // Время между 'кадрами', динамически изменяемое от времени на выполнение всех циклов, чтобы поддерживать стабильные кадры
-            thread::sleep(Duration::from_millis(34) - time_diff);
+            thread::sleep(Duration::from_millis(16) - time_diff);
+            stdout.flush()?;
         }
 
         // Возвращаем терминал в обычное состояние
