@@ -73,6 +73,7 @@ mod code_screen {
     trait Sequence {
         // Шаг очереди, обычно, изменение координаты
         fn step(&mut self);
+        fn draw(&self, stdout: &mut io::Stdout);
 
         // Получение координаты самой первой части очереди
         fn get_top_coord(&self) -> [i32;2];
@@ -81,7 +82,6 @@ mod code_screen {
         fn get_symbol_by_index(&self, i: usize) -> String;
         fn get_x(&self) -> i32;
         fn get_y(&self) -> i32;
-
     }
 
     // Обычная очередь
@@ -118,6 +118,18 @@ mod code_screen {
     impl Sequence for CodeSeuqence {
         fn step(&mut self) {
             self.coords[0] += 1
+        }
+        fn draw(&self, stdout: &mut io::Stdout) {
+            for i in 0..self.length {
+                let coords: [u16;2] = [self.coords[0].try_into().unwrap(), (self.coords[1] + i).try_into().unwrap()];
+                let _ = stdout.execute(MoveTo(coords[0], coords[1]));
+                let symbol;
+                match self.line.get(i as usize) {
+                    Some(char) => {symbol = make_colored_string(*char, self.color)}
+                    None => {panic!()}
+                }
+                let _ = stdout.execute(Print(symbol));
+            }
         }
         fn get_top_coord(&self) -> [i32; 2] {
             return self.coords;
@@ -163,6 +175,18 @@ mod code_screen {
         fn step(&mut self) {
             let mut rng = rand::rng();
             self.coords[0] += rng.random_range(1..3); // Рандомная скорость, мб лучше добавить как поле
+        }
+        fn draw(&self, stdout: &mut io::Stdout) {
+            for i in 0..self.length {
+                let coords: [u16;2] = [self.coords[0].try_into().unwrap(), (self.coords[1] + i).try_into().unwrap()];
+                let _ = stdout.execute(MoveTo(coords[0], coords[1]));
+                let symbol;
+                match self.line.get(i as usize) {
+                    Some(char) => {symbol = make_colored_string(*char, self.colors[0])}
+                    None => {panic!()}
+                }
+                let _ = stdout.execute(Print(symbol));
+            }
         }
         fn get_top_coord(&self) -> [i32; 2] {
             return self.coords;
@@ -221,12 +245,25 @@ mod code_screen {
         stdout.execute(Clear(terminal::ClearType::All))?;
         stdout.execute(Hide)?;
 
+        let (mut cols,mut rows) = terminal::size()?;
+        let mut line: String = "".to_string();
+        for _row in 0..rows {
+            for _col in 0..cols {
+                line += " ";
+            }
+        }
+        execute!(
+                stdout,
+                // Добавляю еще bold на весь шрифт
+                Print("\x1b[1m".to_owned() + &line.clone() + "\x1b[0m")
+            )?;
+        stdout.flush()?;
 
         // Бесконечный цикл падающих строк
         loop {  
             // Время начала выполнения всех циклов
             let time_start = Instant::now();
-            let (cols, rows) = terminal::size()?;
+            (cols, rows) = terminal::size()?;
 
             // Обработка действий в терминале
             if poll(Duration::ZERO)? {
@@ -283,32 +320,33 @@ mod code_screen {
             stdout.execute(MoveTo(0, 0))?;
             
             // Основной цикл отбражения строк в терминал
-            let mut line: String = "".to_string();
-            for row in 0..rows {
-                for col in 0..cols {
-                    let row_i32: i32 = row.into();
-                    match check_seq_on_coords(row_i32, col.into(), &sequences) {
-                        Some(seq) => {
-                            let colored_string = seq.get_symbol_by_index((seq.get_top_coord()[0] - row_i32).try_into().unwrap());
-                            line += &colored_string;
-                        }
-                        None => {
-                            line += " ";
-                        }
-                    }
-                }
+            // let mut line: String = "".to_string();
+            // for row in 0..rows {
+            //     for col in 0..cols {
+            //         let row_i32: i32 = row.into();
+            //         match check_seq_on_coords(row_i32, col.into(), &sequences) {
+            //             Some(seq) => {
+            //                 let colored_string = seq.get_symbol_by_index((seq.get_top_coord()[0] - row_i32).try_into().unwrap());
+            //                 line += &colored_string;
+            //             }
+            //             None => {
+            //                 line += " ";
+            //             }
+            //         }
+            //     }
                  
-            }
-            execute!(
-                    stdout,
-                    // Добавляю еще bold на весь шрифт
-                    Print("\x1b[1m".to_owned() + &line.clone() + "\x1b[0m")
-                )?;
-            stdout.flush()?;
+            // }
+            // execute!(
+            //         stdout,
+            //         // Добавляю еще bold на весь шрифт
+            //         Print("\x1b[1m".to_owned() + &line.clone() + "\x1b[0m")
+            //     )?;
+            // stdout.flush()?;
 
             // Сборка мусора
             for seq in &mut sequences {
                 seq.step();
+                seq.draw(&mut stdout);
             }
             sequences.retain(|x: &Box<dyn Sequence + 'static>| x.get_top_coord()[0]-x.len() < rows.into());
 
