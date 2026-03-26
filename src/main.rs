@@ -121,14 +121,13 @@ mod code_screen {
         }
         fn draw(&self, stdout: &mut io::Stdout) {
             if self.coords[0] - self.length > 0 {
-                let coords: [u16;2] = [(self.coords[0] - self.length).try_into().unwrap(), self.coords[1].try_into().unwrap()];
+                let coords: [u16;2] = [(self.coords[0] - self.length - 1).try_into().unwrap(), self.coords[1].try_into().unwrap()];
                 let _ = stdout.execute(MoveTo(coords[1], coords[0]));
                 let _ = stdout.execute(Print(' '));
             }
             
-            
             for i in 0..self.length {
-                if self.coords[0] - i > 0 {
+                if self.coords[0] - i + 1 > 0 {
                     let coords: [u16;2] = [(self.coords[0] - i).try_into().unwrap(), self.coords[1].try_into().unwrap()];
                     let _ = stdout.execute(MoveTo(coords[1], coords[0]));
                     let symbol;
@@ -186,8 +185,8 @@ mod code_screen {
             self.coords[0] += rng.random_range(1..3); // Рандомная скорость, мб лучше добавить как поле
         }
         fn draw(&self, stdout: &mut io::Stdout) {
-            if self.coords[0] - self.length > 0 {
-                let coords: [u16;2] = [(self.coords[0] - self.length).try_into().unwrap(), self.coords[1].try_into().unwrap()];
+            if self.coords[0] - self.length + 1 > 0 {
+                let coords: [u16;2] = [(self.coords[0] - self.length + 1).try_into().unwrap(), self.coords[1].try_into().unwrap()];
                 let _ = stdout.execute(MoveTo(coords[1], coords[0]));
                 let _ = stdout.execute(Print(' '));
             }
@@ -238,11 +237,6 @@ mod code_screen {
     pub fn get_random_color(colors_vec: &Vec<[i32; 3]>) -> [ i32; 3 ] {
         let mut rng = rand::rng();
         colors_vec.clone().choose(&mut rng).unwrap().clone()
-    }
-
-    // Проверяем, есть ли хоть одна из координат строки в текущем положении курсора
-    fn check_seq_on_coords(row: i32, col: i32, sequences: &Vec<Box<dyn Sequence>>) -> Option<&Box<dyn Sequence>> {
-        return sequences.iter().find(|f| (row..(row+f.len())).contains(&f.get_x()) && f.get_y() == col.into());
     }
 
 
@@ -310,7 +304,8 @@ mod code_screen {
                             get_random_color(&colors_vec),
                             rng.random_range(1..30),
                             symbols
-                        ))
+                        ));
+                        seq.draw(&mut stdout);
                     }
                     "GlitchSequence" => {
                         seq = Box::new(GlitchSequence::new(
@@ -319,6 +314,7 @@ mod code_screen {
                             rng.random_range(1..30),
                             symbols
                         ));
+                        seq.draw(&mut stdout);
                     }
                     _ => {
                         seq = Box::new(CodeSeuqence::new(
@@ -326,52 +322,26 @@ mod code_screen {
                             get_random_color(&colors_vec),
                             rng.random_range(1..30),
                             symbols
-                        ))
+                        ));
+                        seq.draw(&mut stdout);
                     }
                 }
                 sequences.push(seq);
             }
-
-            // Курсор в нулевое положение, чтобы не рисовать всё по новой
-            
-            
-            // Основной цикл отбражения строк в терминал
-            // let mut line: String = "".to_string();
-            // for row in 0..rows {
-            //     for col in 0..cols {
-            //         let row_i32: i32 = row.into();
-            //         match check_seq_on_coords(row_i32, col.into(), &sequences) {
-            //             Some(seq) => {
-            //                 let colored_string = seq.get_symbol_by_index((seq.get_top_coord()[0] - row_i32).try_into().unwrap());
-            //                 line += &colored_string;
-            //             }
-            //             None => {
-            //                 line += " ";
-            //             }
-            //         }
-            //     }
-                 
-            // }
-            // execute!(
-            //         stdout,
-            //         // Добавляю еще bold на весь шрифт
-            //         Print("\x1b[1m".to_owned() + &line.clone() + "\x1b[0m")
-            //     )?;
-            // stdout.flush()?;
 
             // Сборка мусора
             for seq in &mut sequences {
                 seq.step();
                 seq.draw(&mut stdout);
             }
-            sequences.retain(|x: &Box<dyn Sequence + 'static>| x.get_top_coord()[0]-x.len() < rows.into());
+            sequences.retain(|x: &Box<dyn Sequence + 'static>| x.get_top_coord()[0]-x.len() < (rows+1).into() );
 
             // Разница между временем начала и конца выполнения всех циклов
             let time_diff = Instant::now() - time_start;
             
 
             // Время между 'кадрами', динамически изменяемое от времени на выполнение всех циклов, чтобы поддерживать стабильные кадры
-            thread::sleep(Duration::from_millis(16) - time_diff);
+            thread::sleep(Duration::from_millis(34) - time_diff);
             stdout.flush()?;
         }
 
