@@ -98,6 +98,7 @@ mod code_screen {
         colors: Vec<[i32; 3]>,
         line: Vec<char>,
         length: i32,
+        last_step: i8,
         mutable_indexes: Vec<i8> // Надо сделать так, чтобы цвет конкретного символа менялся
     }
 
@@ -120,11 +121,6 @@ mod code_screen {
             self.coords[0] += 1
         }
         fn draw(&self, stdout: &mut io::Stdout) {
-            if self.coords[0] - self.length > 0 {
-                let coords: [u16;2] = [(self.coords[0] - self.length - 1).try_into().unwrap(), self.coords[1].try_into().unwrap()];
-                let _ = stdout.execute(MoveTo(coords[1], coords[0]));
-                let _ = stdout.execute(Print(' '));
-            }
             
             for i in 0..self.length {
                 if self.coords[0] - i + 1 > 0 {
@@ -138,6 +134,13 @@ mod code_screen {
                     let _ = stdout.execute(Print(symbol));
                 }
             }
+            // Так как рисуем с хвоста, нужно делать поправку
+            if self.coords[0] - self.length + 1 > 0 {
+                let coords: [u16;2] = [(self.coords[0] - self.length).try_into().unwrap(), self.coords[1].try_into().unwrap()];
+                let _ = stdout.execute(MoveTo(coords[1], coords[0]));
+                let _ = stdout.execute(Print(' '));
+            }
+
         }
         fn get_top_coord(&self) -> [i32; 2] {
             return self.coords;
@@ -175,7 +178,7 @@ mod code_screen {
                     mutable_indexes.push(i.try_into().unwrap());
                 }
             }
-            return GlitchSequence {coords: [0, col_start], colors: rgb, length, line, mutable_indexes};
+            return GlitchSequence {coords: [0, col_start], colors: rgb, length, line, mutable_indexes, last_step: 1};
         }
     }
 
@@ -185,24 +188,34 @@ mod code_screen {
             self.coords[0] += rng.random_range(1..3); // Рандомная скорость, мб лучше добавить как поле
         }
         fn draw(&self, stdout: &mut io::Stdout) {
-            if self.coords[0] - self.length + 1 > 0 {
-                let coords: [u16;2] = [(self.coords[0] - self.length + 1).try_into().unwrap(), self.coords[1].try_into().unwrap()];
-                let _ = stdout.execute(MoveTo(coords[1], coords[0]));
-                let _ = stdout.execute(Print(' '));
-            }
             
-            for i in self.coords[1]..self.length {
-                if self.coords[0] - i > 0 {
+            for i in 0..self.length {
+                if self.coords[0] - i + 1 > 0 {
+                    
                     let coords: [u16;2] = [(self.coords[0] - i).try_into().unwrap(), self.coords[1].try_into().unwrap()];
                     let _ = stdout.execute(MoveTo(coords[1], coords[0]));
                     let symbol;
                     match self.line.get(i as usize) {
-                        Some(char) => {symbol = make_colored_string(*char, self.colors[0])}
+                        Some(char) => {
+                                if self.mutable_indexes.contains(&i.try_into().unwrap()) {
+                                    symbol = make_colored_string(*char, get_random_color(&self.colors))
+                                }
+                                else {symbol = make_colored_string(*char, self.colors[0])}
+                            }
                         None => {panic!()}
                     }
                     let _ = stdout.execute(Print(symbol));
                 }
             }
+            // Так как рисуем с хвоста, нужно делать поправку
+            for i in 0..self.last_step as i32 + 1 {
+                if self.coords[0] - self.length + i > 0 {
+                    let coords: [u16;2] = [(self.coords[0] - self.length + i - 1).try_into().unwrap(), self.coords[1].try_into().unwrap()];
+                    let _ = stdout.execute(MoveTo(coords[1], coords[0]));
+                    let _ = stdout.execute(Print(' '));
+                }
+            }
+            
         }
         fn get_top_coord(&self) -> [i32; 2] {
             return self.coords;
@@ -243,7 +256,7 @@ mod code_screen {
     pub fn start_code(colors: Option<Vec<[i32; 3]>>) -> Result<(), Box<dyn std::error::Error>> {
         // Статичные данные
         let colors_vec: Vec<[i32; 3]> = colors.unwrap_or([[0, 255, 0]].to_vec());
-        let sequence_types: [&str; 1] = ["CodeSequence"/*, "GlitchSequence"*/];
+        let sequence_types: [&str; 2] = ["CodeSequence", "GlitchSequence"];
         let symbols: &str = "10"; 
 
         // Меняющиеся данные
@@ -334,7 +347,7 @@ mod code_screen {
                 seq.step();
                 seq.draw(&mut stdout);
             }
-            sequences.retain(|x: &Box<dyn Sequence + 'static>| x.get_top_coord()[0]-x.len() < (rows+1).into() );
+            sequences.retain(|x: &Box<dyn Sequence + 'static>| x.get_top_coord()[0] - x.len() < (rows+1).into() );
 
             // Разница между временем начала и конца выполнения всех циклов
             let time_diff = Instant::now() - time_start;
