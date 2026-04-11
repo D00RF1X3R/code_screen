@@ -257,7 +257,7 @@ mod code_screen {
         // Статичные данные
         let colors_vec: Vec<[i32; 3]> = colors.unwrap_or([[0, 255, 0]].to_vec());
         let sequence_types: [&str; 2] = ["CodeSequence", "GlitchSequence"];
-        let symbols: &str = "10"; 
+        let symbols: &str = "0123456789qwertyuiop[]asdfghjkl;'\\zxcvbnm,./QWERTYUIOP\\{}ASDFGHJKL:|ZXCVBNM<>?"; 
 
         // Меняющиеся данные
         let mut stdout: io::Stdout = io::stdout();
@@ -350,11 +350,14 @@ mod code_screen {
             sequences.retain(|x: &Box<dyn Sequence + 'static>| x.get_top_coord()[0] - x.len() < (rows+1).into() );
 
             // Разница между временем начала и конца выполнения всех циклов
-            let time_diff = Instant::now() - time_start;
-            
+            let mut time_diff = Duration::ZERO;
+            if time_start > Instant::now() {
+                time_diff = Instant::now() - time_start
+            }
 
             // Время между 'кадрами', динамически изменяемое от времени на выполнение всех циклов, чтобы поддерживать стабильные кадры
-            thread::sleep(Duration::from_millis(34) - time_diff);
+            thread::sleep(Duration::from_millis(17) - time_diff);
+            
             stdout.flush()?;
         }
 
