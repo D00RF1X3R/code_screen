@@ -5,9 +5,10 @@ use crate::code_screen::start_code;
 fn main() {
     let args: Vec<String> = env::args().collect();
     let mut colors: Vec<[i32;3]> = vec![];
-    
+    let mut amount: i16 = 50;
+
     if args.len() == 1 {
-        let _ = start_code(None);
+        let _ = start_code(None, amount.try_into().expect("Ебло утиное"));
     } else {
         for arg in 1..args.len() {
             let argument = &args[arg];
@@ -29,6 +30,9 @@ fn main() {
                         counter += 1;
                     }
                 }
+                val if val == "-a" || val == "--Amount" => {
+                    amount = 101 - args[arg+1].parse::<i16>().expect("Насрано"); 
+                }
                 /*val if val == "--Color" => {
 
                 }*/
@@ -37,7 +41,7 @@ fn main() {
         }
 
         if colors.len() != 0 {
-            let _ = start_code(Some(colors));
+            let _ = start_code(Some(colors), amount.try_into().expect("Ебло утиное"));
         }
     }
     
@@ -49,8 +53,8 @@ mod code_screen {
     use std::io::{self};
     use std::thread;
     use std::time::{Duration, Instant};
-    use crossterm::cursor::{Hide, MoveLeft, MoveTo, MoveUp, Show};
-    use crossterm::{ExecutableCommand, execute};
+    use crossterm::cursor::{Hide, MoveTo, Show};
+    use crossterm::{ExecutableCommand};
     use crossterm::event::{Event, KeyCode, poll, read};
     use crossterm::style::{Print,};
     use crossterm::terminal::{self, Clear, disable_raw_mode, enable_raw_mode};
@@ -62,9 +66,11 @@ mod code_screen {
         // "\x1b[38;2;255;255;255m"
         let colored_string: String;
         if symbol != ' '{
-            colored_string = format!("\x1b[48;2;1;1;1m\x1b[38;2;{};{};{}m{}", rgb[0], rgb[1], rgb[2], symbol);
+            //colored_string = format!("\x1b[48;2;1;1;1m\x1b[38;2;{};{};{}m{}", rgb[0], rgb[1], rgb[2], symbol);
+            colored_string = format!("\x1b[38;2;{};{};{}m{}", rgb[0], rgb[1], rgb[2], symbol);
         } else {
-            colored_string = format!("\x1b[38;2;255;255;255m\x1b[48;2;{};{};{}m{}", rgb[0], rgb[1], rgb[2], symbol);
+            //colored_string = format!("\x1b[38;2;255;255;255m\x1b[48;2;{};{};{}m{}", rgb[0], rgb[1], rgb[2], symbol);
+            colored_string = format!("\x1b[48;2;{};{};{}m{}", rgb[0], rgb[1], rgb[2], symbol);
         }
 
         return colored_string;
@@ -79,7 +85,7 @@ mod code_screen {
         fn get_top_coord(&self) -> [i32;2];
 
         fn len(&self) -> i32;
-        fn get_symbol_by_index(&self, i: usize) -> String;
+        //fn get_symbol_by_index(&self, i: usize) -> String;
         fn get_x(&self) -> i32;
         fn get_y(&self) -> i32;
     }
@@ -148,12 +154,12 @@ mod code_screen {
         fn len(&self) -> i32 {
             return self.length;
         }
-        fn get_symbol_by_index(&self, i: usize) -> String {
-            match self.line.get(i) {
-                Some (char ) => {return make_colored_string(*char, self.color)}
-                None => {panic!()}
-            }
-        }
+        // fn get_symbol_by_index(&self, i: usize) -> String {
+        //     match self.line.get(i) {
+        //         Some (char ) => {return make_colored_string(*char, self.color)}
+        //         None => {panic!()}
+        //     }
+        // }
         fn get_x(&self) -> i32 {
             self.coords[0]
         }
@@ -223,20 +229,20 @@ mod code_screen {
         fn len(&self) -> i32 {
             return self.length;
         }
-        fn get_symbol_by_index(&self, i: usize) -> String {
-            match self.line.get(i) {
-                Some (char ) => {
-                    if self.mutable_indexes.contains(&(i as i8)) {
-                        let color = get_random_color(&self.colors);
-                        return make_colored_string(*char, color)
-                    }
-                    else {return make_colored_string(*char, self.colors[0]);}
+        // fn get_symbol_by_index(&self, i: usize) -> String {
+        //     match self.line.get(i) {
+        //         Some (char ) => {
+        //             if self.mutable_indexes.contains(&(i as i8)) {
+        //                 let color = get_random_color(&self.colors);
+        //                 return make_colored_string(*char, color)
+        //             }
+        //             else {return make_colored_string(*char, self.colors[0]);}
 
                     
-                }
-                None => {panic!()}
-            }
-        }
+        //         }
+        //         None => {panic!()}
+        //     }
+        // }
         fn get_x(&self) -> i32 {
             self.coords[0]
         }
@@ -251,9 +257,22 @@ mod code_screen {
         let mut rng = rand::rng();
         colors_vec.clone().choose(&mut rng).unwrap().clone()
     }
+    fn check_if_available(sequences: &Vec<Box<dyn Sequence>>, col_start: i32) -> bool {
+        let mut flag = true;
+        for i in 0..sequences.len() {
+            let seq_col = sequences[i].get_x();
+            let seq_y = sequences[i].get_y();
+            let seq_lentgth = sequences[i].len();
+            if seq_col == col_start {
+                if (seq_y..(seq_y+seq_lentgth)).contains(&0) {
+                    flag = false;
+                }
+            }
+        }
+        return flag
+    }
 
-
-    pub fn start_code(colors: Option<Vec<[i32; 3]>>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn start_code(colors: Option<Vec<[i32; 3]>>, amount: u16) -> Result<(), Box<dyn std::error::Error>> {
         // Статичные данные
         let colors_vec: Vec<[i32; 3]> = colors.unwrap_or([[0, 255, 0]].to_vec());
         let sequence_types: [&str; 2] = ["CodeSequence", "GlitchSequence"];
@@ -270,19 +289,19 @@ mod code_screen {
         stdout.execute(Hide)?;
 
         let (mut cols,mut rows) = terminal::size()?;
-        let mut line: String = "".to_string();
-        for _row in 0..rows {
-            for _col in 0..cols {
-                line += &make_colored_string(' ', [1, 1, 1]);
-            }
-        }
-        execute!(
-                stdout,
-                // Добавляю еще bold на весь шрифт
-                Print("\x1b[1m".to_owned() + &line.clone() + "\x1b[0m")
-            )?;
-        stdout.flush()?;
-        stdout.execute(MoveTo(0, 0))?;
+        //let mut line: String = "".to_string();
+        // for _row in 0..rows {
+        //     for _col in 0..cols {
+        //         line += &make_colored_string(' ', [1, 1, 1]);
+        //     }
+        // }
+        // execute!(
+        //         stdout,
+        //         // Добавляю еще bold на весь шрифт
+        //         Print("\x1b[1m".to_owned() + &line.clone() + "\x1b[0m")
+        //     )?;
+        // stdout.flush()?;
+        // stdout.execute(MoveTo(0, 0))?;
 
         // Бесконечный цикл падающих строк
         loop {  
@@ -308,38 +327,42 @@ mod code_screen {
             }
 
             // Создание случайных строчек кода
-            for _ in  0..rng.random_range(1..cols.div_ceil(25)){ // Нужно будет добавить в аргументы число, чтобы контролироовать количество строк
+            for _ in  0..rng.random_range(1..cols.div_ceil(amount)){ // Нужно будет добавить в аргументы число, чтобы контролироовать количество строк
                 let seq: Box<dyn Sequence>;
-                match *sequence_types.iter().choose(&mut rng).unwrap() {
-                    "CodeSequence" => {
-                        seq = Box::new(CodeSeuqence::new(
-                            rng.random_range(0..cols).into(),
-                            get_random_color(&colors_vec),
-                            rng.random_range(1..30),
-                            symbols
-                        ));
-                        seq.draw(&mut stdout);
+                let col_start = rng.random_range(0..cols).into();
+                if check_if_available(&sequences, col_start) {
+                    match *sequence_types.iter().choose(&mut rng).unwrap() {
+                        "CodeSequence" => {
+                            seq = Box::new(CodeSeuqence::new(
+                                rng.random_range(0..cols).into(),
+                                get_random_color(&colors_vec),
+                                rng.random_range(1..30),
+                                symbols
+                            ));
+                            seq.draw(&mut stdout);
+                        }
+                        "GlitchSequence" => {
+                            seq = Box::new(GlitchSequence::new(
+                                rng.random_range(0..cols).into(),
+                                colors_vec.clone(),
+                                rng.random_range(1..30),
+                                symbols
+                            ));
+                            seq.draw(&mut stdout);
+                        }
+                        _ => {
+                            seq = Box::new(CodeSeuqence::new(
+                                rng.random_range(0..cols).into(),
+                                get_random_color(&colors_vec),
+                                rng.random_range(1..30),
+                                symbols
+                            ));
+                            seq.draw(&mut stdout);
+                        }
                     }
-                    "GlitchSequence" => {
-                        seq = Box::new(GlitchSequence::new(
-                            rng.random_range(0..cols).into(),
-                            colors_vec.clone(),
-                            rng.random_range(1..30),
-                            symbols
-                        ));
-                        seq.draw(&mut stdout);
-                    }
-                    _ => {
-                        seq = Box::new(CodeSeuqence::new(
-                            rng.random_range(0..cols).into(),
-                            get_random_color(&colors_vec),
-                            rng.random_range(1..30),
-                            symbols
-                        ));
-                        seq.draw(&mut stdout);
-                    }
+                    sequences.push(seq);
                 }
-                sequences.push(seq);
+                
             }
 
             // Сборка мусора
@@ -354,7 +377,7 @@ mod code_screen {
             if time_start > Instant::now() {
                 time_diff = Instant::now() - time_start
             }
-
+            
             // Время между 'кадрами', динамически изменяемое от времени на выполнение всех циклов, чтобы поддерживать стабильные кадры
             thread::sleep(Duration::from_millis(17) - time_diff);
             
