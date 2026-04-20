@@ -264,7 +264,7 @@ mod code_screen {
             let seq_y = sequences[i].get_y();
             let seq_lentgth = sequences[i].len();
             if seq_col == col_start {
-                if (seq_y..(seq_y+seq_lentgth)).contains(&0) {
+                if (seq_y..(seq_y-seq_lentgth)).contains(&0) {
                     flag = false;
                 }
             }
